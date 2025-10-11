@@ -134,48 +134,80 @@ def get_platform_info() -> dict:
     }
 
 
-def check_chrome_executable() -> Optional[str]:
+def check_browser_executable() -> Optional[str]:
     """
-    Find the Chrome/Chromium executable on the system.
+    Find a compatible browser executable on the system.
+    Searches for Chrome, Chromium, and Microsoft Edge in order of preference.
     
     Returns:
-        Optional[str]: Path to Chrome executable or None if not found
+        Optional[str]: Path to browser executable or None if not found
     """
     system = platform.system().lower()
     
     if system == 'windows':
         possible_paths = [
+            # Chrome paths
             r'C:\Program Files\Google\Chrome\Application\chrome.exe',
             r'C:\Program Files (x86)\Google\Chrome\Application\chrome.exe',
             r'C:\Users\{}\AppData\Local\Google\Chrome\Application\chrome.exe'.format(os.environ.get('USERNAME', '')),
+            # Chromium paths
             r'C:\Program Files\Chromium\Application\chromium.exe',
+            # Microsoft Edge paths
+            r'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe',
+            r'C:\Program Files\Microsoft\Edge\Application\msedge.exe',
+            r'C:\Users\{}\AppData\Local\Microsoft\Edge\Application\msedge.exe'.format(os.environ.get('USERNAME', '')),
         ]
     elif system == 'darwin':
         possible_paths = [
+            # Chrome paths
             '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+            # Chromium paths
             '/Applications/Chromium.app/Contents/MacOS/Chromium',
+            # Microsoft Edge paths
+            '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
         ]
     else:
         possible_paths = [
+            # Chrome paths
             '/usr/bin/google-chrome',
             '/usr/bin/google-chrome-stable',
+            # Chromium paths
             '/usr/bin/chromium',
             '/usr/bin/chromium-browser',
             '/snap/bin/chromium',
             '/usr/local/bin/chrome',
+            # Microsoft Edge paths
+            '/usr/bin/microsoft-edge-stable',
+            '/usr/bin/microsoft-edge',
+            '/usr/bin/microsoft-edge-beta',
+            '/usr/bin/microsoft-edge-dev',
+            '/snap/bin/microsoft-edge',
+            '/opt/microsoft/msedge/msedge',
         ]
     
+    # First check static paths
     for path in possible_paths:
-        if os.path.isfile(path) and os.access(path, os.X_OK):
-            return path
-    
-    chrome_names = ['google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser', 'chrome']
-    for name in chrome_names:
         try:
-            result = subprocess.run(['which', name], capture_output=True, text=True)
+            if os.path.isfile(path) and os.access(path, os.X_OK):
+                return path
+        except (OSError, PermissionError):
+            # Handle potential permission issues on certain systems
+            continue
+    
+    # Fallback: search using 'which' command
+    browser_names = [
+        'google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser', 'chrome',
+        'microsoft-edge-stable', 'microsoft-edge', 'msedge'
+    ]
+    for name in browser_names:
+        try:
+            result = subprocess.run(['which', name], capture_output=True, text=True, timeout=5)
             if result.returncode == 0 and result.stdout.strip():
-                return result.stdout.strip()
-        except (subprocess.SubprocessError, FileNotFoundError):
+                found_path = result.stdout.strip()
+                # Verify the found executable is actually executable
+                if os.path.isfile(found_path) and os.access(found_path, os.X_OK):
+                    return found_path
+        except (subprocess.SubprocessError, FileNotFoundError, subprocess.TimeoutExpired):
             continue
     
     return None
@@ -184,18 +216,34 @@ def check_chrome_executable() -> Optional[str]:
 def validate_browser_environment() -> dict:
     """
     Validate the browser environment and return status information.
+    Checks for Chrome, Chromium, and Microsoft Edge availability.
     
     Returns:
         dict: Environment validation results
     """
-    chrome_path = check_chrome_executable()
+    browser_path = check_browser_executable()
     platform_info = get_platform_info()
     
     issues = []
     warnings = []
+    recommendations = []
     
-    if not chrome_path:
-        issues.append("Chrome/Chromium executable not found")
+    if not browser_path:
+        issues.append("Compatible browser executable not found (Chrome, Chromium, or Microsoft Edge)")
+        recommendations.append("Install a compatible browser (Chrome, Chromium, or Microsoft Edge)")
+    else:
+        # Identify which browser was found
+        browser_type = "Unknown"
+        if 'chrome' in browser_path.lower():
+            browser_type = "Google Chrome"
+        elif 'chromium' in browser_path.lower():
+            browser_type = "Chromium"
+        elif 'edge' in browser_path.lower() or 'msedge' in browser_path.lower():
+            browser_type = "Microsoft Edge"
+            
+        # Add Edge-specific warnings if applicable
+        if browser_type == "Microsoft Edge" and platform_info['system'] == 'Linux':
+            warnings.append("Microsoft Edge on Linux detected - ensure all dependencies are installed")
     
     if platform_info['is_root']:
         warnings.append("Running as root/administrator - sandbox will be disabled")
@@ -207,10 +255,12 @@ def validate_browser_environment() -> dict:
         warnings.append(f"Untested platform: {platform_info['system']}")
     
     return {
-        'chrome_executable': chrome_path,
+        'browser_executable': browser_path,
+        'browser_type': browser_type if browser_path else None,
         'platform_info': platform_info,
         'issues': issues,
         'warnings': warnings,
+        'recommendations': recommendations,
         'is_ready': len(issues) == 0,
         'recommended_args': get_required_sandbox_args(),
     }

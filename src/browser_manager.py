@@ -12,7 +12,7 @@ from debug_logger import debug_logger
 from models import BrowserInstance, BrowserState, BrowserOptions, PageState
 from persistent_storage import persistent_storage
 from dynamic_hook_system import dynamic_hook_system
-from platform_utils import get_platform_info
+from platform_utils import get_platform_info, check_browser_executable
 from process_cleanup import process_cleanup
 
 
@@ -44,16 +44,32 @@ class BrowserManager:
 
         try:
             platform_info = get_platform_info()
+            
+            # Detect the best available browser executable (Chrome, Chromium, or Edge)
+            browser_executable = check_browser_executable()
+            if not browser_executable:
+                raise Exception("No compatible browser found (Chrome, Chromium, or Microsoft Edge)")
+            
+            # Identify browser type for logging
+            browser_type = "Unknown"
+            if 'edge' in browser_executable.lower() or 'msedge' in browser_executable.lower():
+                browser_type = "Microsoft Edge"
+            elif 'chromium' in browser_executable.lower():
+                browser_type = "Chromium"
+            elif 'chrome' in browser_executable.lower():
+                browser_type = "Google Chrome"
+            
             debug_logger.log_info(
-                "browser_manager", 
-                "spawn_browser", 
-                f"Platform info: {platform_info['system']} | Root: {platform_info['is_root']} | Container: {platform_info['is_container']} | Sandbox: {options.sandbox}"
+                "browser_manager",
+                "spawn_browser",
+                f"Platform: {platform_info['system']} | Root: {platform_info['is_root']} | Container: {platform_info['is_container']} | Sandbox: {options.sandbox} | Browser: {browser_type} ({browser_executable})"
             )
             
             config = uc.Config(
                 headless=options.headless,
                 user_data_dir=options.user_data_dir,
-                sandbox=options.sandbox
+                sandbox=options.sandbox,
+                browser_executable_path=browser_executable
             )
 
             browser = await uc.start(config=config)
