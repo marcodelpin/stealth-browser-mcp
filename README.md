@@ -220,8 +220,8 @@ Restart your MCP client and ask your agent:
 - **Check paths**: Make sure the Claude CLI command uses the correct venv path
 
 **❌ Chrome/Browser issues**
-- **Solution**: The server will automatically download Chrome when first run
-- **No manual Chrome installation needed**
+- **Solution**: The server will automatically detect Chrome, Chromium, or Microsoft Edge when first run
+- **No manual browser installation needed** - supports Chrome, Chromium, and Edge
 
 **❌ "Failed to connect to browser" / Root user issues**
 - **Solution**: ✅ **FIXED in v0.2.4!** Auto-detects root/administrator and adds `--no-sandbox` automatically
@@ -259,6 +259,8 @@ Restart your MCP client and ask your agent:
 - 90 focused tools organized into 11 logical sections
 
 > Built on [nodriver](https://github.com/ultrafunkamsterdam/nodriver) + Chrome DevTools Protocol + FastMCP
+>
+> **🌐 Browser Support**: Chrome • Chromium • Microsoft Edge (automatic detection)
 
 ## 🎯 **NEW: Advanced Text Input**
 
@@ -305,7 +307,7 @@ validate_browser_environment_tool()  # Diagnose your environment
 - **Root/Administrator Detection**: Auto-adds `--no-sandbox` when running as root
 - **Container Detection**: Detects Docker/Kubernetes and adds container-specific args
 - **Platform-Aware**: Handles Windows, Linux, macOS differences automatically
-- **Chrome Discovery**: Automatically finds Chrome/Chromium installation
+- **Browser Discovery**: Automatically finds Chrome, Chromium, or Microsoft Edge installation
 
 ### 🔧 **Flexible Args Handling**
 ```json
