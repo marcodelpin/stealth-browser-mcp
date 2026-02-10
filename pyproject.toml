@@ -1,6 +1,6 @@
 [project]
 name = "stealth-browser-mcp"
-version = "0.2.4"
+version = "0.2.5"
 description = "Ultimate undetectable browser automation MCP server with CDP-level access"
 readme = "README.md"
 requires-python = ">=3.10"

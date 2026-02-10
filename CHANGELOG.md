@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog and adheres to Semantic Versioning where practical.
 
+## [0.2.5] - 2026-02-10
+### Fixed
+- **MCP JSON-RPC Protocol Corruption** - All debug `print()` calls redirected from stdout to stderr, fixing tool hangs after `spawn_browser` and `navigate` (#8)
+- **Python Version Requirement** - Corrected `requires-python` from `>=3.8` to `>=3.10` (fastmcp requires 3.10+)
+- **Missing Dependency** - Added `uvicorn[standard]` to pyproject.toml (was only in requirements.txt)
+- **SECURITY.md Branch Reference** - Fixed `main` to `master`
+
+### Added
+- **Microsoft Edge Support** - Automatic browser detection for Chrome, Chromium, and Edge (thanks [@Hamza5](https://github.com/Hamza5))
+- **Troubleshooting Section** - Common issues and fixes documented in README
+
+### Changed
+- **README Rewrite** - Reduced from 706 to 468 lines; removed duplicate tool listings, stale labels, and excessive emojis
+- **Hall of Fame** - Replaced fabricated testimonials with real contributor table and verified use cases
+- **Example Prompts** - Stripped marketing hype, kept practical copy-paste prompts
+- **Repo Cleanup** - Removed internal Checklist.md from tracking, updated Discord links
+
 ## [0.2.4] - 2025-08-11
 ### Fixed
 - **🛡️ Root User Browser Spawning** - Fixed "Failed to connect to browser" when running as root/administrator
