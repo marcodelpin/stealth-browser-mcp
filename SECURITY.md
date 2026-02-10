@@ -2,7 +2,7 @@
 
 ### Supported versions
 
-We support the latest release and the current `main` branch.
+We support the latest release and the current `master` branch.
 
 ### Reporting a vulnerability
 

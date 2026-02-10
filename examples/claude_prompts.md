@@ -1,141 +1,68 @@
-# 🔥 **Viral AI Agent Prompts - Copy & Paste to Blow Minds**
+# Example Prompts
 
-*These prompts showcase why this MCP gets 10k+ stars*
-
----
-
-## 🏆 **The "Impossible" Automations**
-
-### 🛡️ **Bypass Cloudflare Like a Ghost**
-```
-Use stealth-browser to navigate to a Cloudflare-protected site that blocks all bots. Take a screenshot proving you're accessing the content. Then extract the main content area using extract_complete_element_cdp and show me the HTML structure.
-```
-*💡 Why this goes viral: Everyone struggles with Cloudflare. This just works.*
-
-### 🏦 **Automate Banking Without Getting Flagged**  
-```
-Use stealth-browser to navigate to [your bank's] login page. Take a screenshot of the login form. Use extract_element_structure to analyze the form fields and security measures. Report what anti-bot protections are visible and how they differ from regular forms.
-```
-*💡 Why this goes viral: Banks block everyone. This doesn't get detected.*
-
-### 🎯 **Clone Any UI Element Perfectly**
-```
-Use stealth-browser to navigate to stripe.com/pricing. Use extract_complete_element_cdp to clone their pricing table with pixel-perfect accuracy. Extract all CSS, fonts, images, and animations. Generate working HTML that I can use in my own site.
-```
-*💡 Why this goes viral: Perfect UI cloning is a $10k+ service. This does it instantly.*
+Copy-paste prompts to get started with Stealth Browser MCP.
 
 ---
 
-## 🚀 **Advanced AI Workflows**
+## Navigation and Extraction
 
-### 🕵️ **Turn AI Agent Into Network Detective**
+**Bypass antibot protection and extract content:**
 ```
-Use stealth-browser to navigate to [modern web app]. As I interact with the page, use list_network_requests to monitor all API calls in real-time. For each request, use get_request_details and get_response_content to show me exactly what data is being sent and received. Create a complete API map with endpoints, authentication methods, rate limits, and data schemas.
-```
-*💡 Why this goes viral: Replaces expensive API analysis tools with simple AI chat*
-
-### 🎯 **AI Writes Custom Network Hooks**
-```
-Use stealth-browser's dynamic hook system to create custom Python functions that intercept and modify network requests in real-time. Create a hook that blocks all social media trackers during work hours, redirects API calls to mock servers for testing, and logs authentication requests with custom headers. Show me the Python code the AI generated.
-```
-*💡 Why this goes viral: No other tool lets AI write custom interception logic*
-
-### 🤖 **Execute Python Code Inside Chrome**
-```
-Use stealth-browser to navigate to a page with a complex form. Use execute_python_in_browser to write Python code that analyzes the page structure, fills out the form intelligently, and validates the data before submission. Show me the Python code running inside the browser.
+Use stealth-browser to navigate to a Cloudflare-protected site. Take a screenshot proving access, then extract the main content area using extract_complete_element_cdp and show me the HTML structure.
 ```
 
-### 🎭 **Multi-Tab Social Media Operations**  
+**Clone a UI element with full fidelity:**
 ```
-Use stealth-browser to open 5 tabs: LinkedIn, Twitter, Instagram, Facebook, TikTok. In each tab, navigate to a competitor's profile and use progressive element cloning to extract their content strategy. Use expand_styles and expand_events to understand their engagement mechanics. Compile a comprehensive competitive analysis.
+Use stealth-browser to navigate to stripe.com/pricing. Use extract_complete_element_cdp to clone their pricing table. Extract all CSS, fonts, images, and animations. Generate working HTML I can use locally.
 ```
 
 ---
 
-## 💰 **Business Impact Prompts**
+## Network Analysis
 
-### 📊 **Real-Time Competitor Monitoring**
+**Map API endpoints through interception:**
 ```
-Set up stealth-browser to monitor 10 competitor pricing pages simultaneously. Use extract_element_styles to identify price elements, then execute_python_in_browser to calculate price changes in real-time. Alert me when any competitor drops prices below our threshold.
-```
-
-### 🎫 **Event Ticket Monitoring System**
-```
-Use stealth-browser to monitor Ticketmaster for [artist/event]. Use wait_for_element to detect when tickets become available, then use extract_element_assets to capture seat maps and pricing. Use network interception to understand their inventory system.
+Use stealth-browser to navigate to [web app URL]. As I interact with the page, use list_network_requests to monitor all API calls. For each request, use get_request_details and get_response_content to show me the data flow. Create a complete API map with endpoints, auth methods, and data schemas.
 ```
 
-### 🏠 **Real Estate Data Pipeline**  
+**Create a dynamic network hook:**
 ```
-Use stealth-browser to create a real estate monitoring system across Zillow, Redfin, and Realtor.com. Use progressive element cloning to extract property details, then use execute_python_in_browser to analyze market trends and identify undervalued properties in real-time.
+Use stealth-browser's dynamic hook system to create a Python function that blocks all tracking requests matching *.analytics.* and logs every API call to /api/* with full headers and payloads.
 ```
 
 ---
 
-## 🎪 **Show-Off Prompts (Social Media Gold)**
+## Multi-Tab Workflows
 
-### 🎨 **AI-Powered Website Redesign**
+**Competitor analysis across tabs:**
 ```
-Use stealth-browser to navigate to my competitor's site. Use extract_complete_element_cdp to clone their best sections, then use execute_python_in_browser to analyze their design patterns. Create an improved version of their homepage that follows modern design principles.
-```
-
-### 🔍 **Privacy Audit Any Website**
-```
-Use stealth-browser to perform a complete privacy audit of [website]. Use network interception to capture all tracking requests, extract_element_events to find hidden analytics code, and execute_python_in_browser to generate a comprehensive privacy report showing exactly what data they collect.
-```
-
-### 🎮 **Gaming the System (Ethically)**
-```
-Use stealth-browser to navigate to an e-commerce site with complex pricing algorithms. Use network interception and execute_python_in_browser to understand their dynamic pricing model. Show me how prices change based on user behavior, location, and time of day.
+Use stealth-browser to open tabs for 5 competitor sites. In each tab, navigate to their pricing page and use extract_complete_element_cdp to capture the pricing section. Compile a comparison of features and pricing.
 ```
 
 ---
 
-## 🔥 **One-Liners That Break The Internet**
+## Monitoring
 
+**Price monitoring:**
 ```
-"Your AI agent can see every network request, response, and payload through simple chat"
-```
-
-```
-"Replace Postman, Charles Proxy, and dev tools with natural language commands"
+Use stealth-browser to navigate to [product page]. Use extract_element_structure to identify the price element. Use execute_script to read the current price and compare it against a threshold. Take a screenshot of the result.
 ```
 
+**Privacy audit:**
 ```
-"Clone Stripe's entire pricing page with pixel-perfect accuracy in 10 seconds"
-```
-
-```
-"Bypass Cloudflare protection that blocks Selenium, Playwright, and Puppeteer"
-```
-
-```
-"Debug APIs by asking your AI: 'What requests happened when I clicked login?'"
-```
-
-```
-"AI writes custom Python functions to intercept and modify network traffic in real-time"
-```
-
-```
-"Execute Python code inside Chrome and automate any protected banking portal"
-```
-
-```
-"Extract LinkedIn Sales Navigator data without getting your account flagged"
-```
-
-```
-"Monitor Supreme drops and automatically add to cart faster than any other bot"
+Use stealth-browser to navigate to [website]. Use network interception to capture all tracking requests and extract_element_events to find analytics code. Generate a report of what data the site collects.
 ```
 
 ---
 
-## 🎯 **The Ultimate Test**
+## In-Browser Code Execution
 
+**Run Python inside the browser:**
 ```
-Give me your "impossible to automate" website. I'll show you how stealth-browser makes it look easy. Banking portals, government sites, social media, e-commerce with bot protection - bring your worst challenge.
+Use stealth-browser to navigate to a page with a complex form. Use execute_python_in_browser to write Python code that analyzes the page structure and fills out the form fields programmatically.
 ```
 
-**Copy any prompt above and watch your AI agent do what no other tool can do. That's why this repo deserves 10k stars.** ⭐
-
-
+**Dynamic pricing analysis:**
+```
+Use stealth-browser to navigate to an e-commerce site. Use network interception and execute_python_in_browser to observe how prices change based on request headers, cookies, and session state.
+```
