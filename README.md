@@ -170,7 +170,10 @@ Choose exactly what functionality you need. Run the full 90-tool suite or strip 
 python src/server.py --minimal
 python src/server.py --disable-cdp-functions --disable-dynamic-hooks
 python src/server.py --list-sections
+python src/server.py --debug
 ```
+
+Use `--debug` or set `STEALTH_BROWSER_DEBUG=1` to enable verbose server diagnostics on `stderr`. In normal MCP `stdio` usage, debug logging stays quiet by default to avoid noisy transport output.
 
 **Available sections:**
 
@@ -391,6 +394,9 @@ Install Chrome, Chromium, or Microsoft Edge. The server auto-detects the first a
 
 **Tools hang or return malformed JSON**
 Debug output was printing to stdout, corrupting the MCP JSON-RPC protocol. This was fixed in [#8](https://github.com/vibheksoni/stealth-browser-mcp/issues/8). Pull the latest `master` branch.
+
+**Need verbose diagnostics without noisy normal runs**
+Use `python src/server.py --debug` or set `STEALTH_BROWSER_DEBUG=1`. Debug logs are emitted to `stderr`; normal MCP `stdio` runs stay quiet by default.
 
 **Browser crashes on Linux / Docker / CI**
 Run with `--sandbox=false` or ensure your environment supports sandboxing. The server auto-detects root and container environments and adjusts accordingly.
