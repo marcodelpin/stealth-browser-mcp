@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import os
 import time
 from typing import List, Optional, Dict, Any
 
@@ -355,6 +356,72 @@ class DOMHandler:
 
         except Exception as e:
             raise Exception(f"Failed to paste text: {str(e)}")
+
+    @staticmethod
+    async def file_upload(
+        tab: Tab,
+        selector: str,
+        paths: List[str],
+    ) -> Dict[str, Any]:
+        """
+        Upload local files to a <input type="file"> element via CDP DOM.setFileInputFiles.
+
+        Resolves the actual file input even when the selector matches a wrapper
+        (Workday, Ashby, LinkedIn often hide the real input behind a styled button).
+        Refuses multi-file upload when the input lacks the `multiple` attribute
+        (avoids browser crash documented in nodriver send_file()).
+
+        Args:
+            tab (Tab): The browser tab object.
+            selector (str): CSS selector for the file input or any ancestor that contains it.
+            paths (List[str]): Absolute local file paths to upload (single or multiple).
+
+        Returns:
+            Dict[str, Any]: { success: True, count: N, files: [basename, ...] }
+        """
+        try:
+            if not paths:
+                raise Exception("paths must contain at least one file")
+            for p in paths:
+                if not os.path.isabs(p):
+                    raise Exception(f"Path must be absolute: {p}")
+                if not os.path.exists(p):
+                    raise Exception(f"File does not exist: {p}")
+
+            element = await tab.select(selector)
+            if not element:
+                raise Exception(f"Element not found: {selector}")
+
+            tag_name = element.tag_name
+            input_type = (element.attrs.get('type') or '').lower()
+            if tag_name != 'input' or input_type != 'file':
+                inner_input = await element.query_selector('input[type="file"]')
+                if inner_input:
+                    element = inner_input
+                else:
+                    raise Exception(
+                        f"Selector did not resolve to a file input "
+                        f"(got <{tag_name} type=\"{input_type}\">). "
+                        f"Pass a selector that matches the <input type=\"file\"> "
+                        f"or one of its ancestors."
+                    )
+
+            if len(paths) > 1 and 'multiple' not in element.attrs:
+                raise Exception(
+                    f"File input does not accept multiple files "
+                    f"(no 'multiple' attribute), but {len(paths)} paths were "
+                    f"provided. Pass one path or upload sequentially."
+                )
+
+            await element.send_file(*paths)
+            return {
+                "success": True,
+                "count": len(paths),
+                "files": [os.path.basename(p) for p in paths],
+            }
+
+        except Exception as e:
+            raise Exception(f"Failed to upload file(s): {str(e)}") from e
 
     @staticmethod
     async def select_option(

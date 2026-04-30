@@ -498,6 +498,32 @@ async def paste_text(
     return await dom_handler.paste_text(tab, selector, text, clear_first)
 
 @section_tool("element-interaction")
+async def file_upload(
+    instance_id: str,
+    selector: str,
+    paths: List[str]
+) -> Dict[str, Any]:
+    """
+    Upload local files to a <input type="file"> element via CDP DOM.setFileInputFiles.
+
+    Resolves the actual file input even if the selector matches a wrapper element
+    (Workday/Ashby/LinkedIn often hide the real input behind a styled button).
+    Refuses multi-file upload when the input lacks the `multiple` attribute.
+
+    Args:
+        instance_id (str): Browser instance ID.
+        selector (str): CSS selector for the file input or any ancestor that contains it.
+        paths (List[str]): Absolute local file paths to upload (single or multiple).
+
+    Returns:
+        Dict[str, Any]: { success: True, count: N, files: [basename, ...] }
+    """
+    tab = await browser_manager.get_tab(instance_id)
+    if not tab:
+        raise Exception(f"Instance not found: {instance_id}")
+    return await dom_handler.file_upload(tab, selector, paths)
+
+@section_tool("element-interaction")
 async def select_option(
     instance_id: str,
     selector: str,
