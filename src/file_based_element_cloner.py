@@ -1,18 +1,17 @@
 import asyncio
 import json
-import os
 import sys
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Any, Optional
+from typing import Any, Dict, List, Optional
 
 try:
     from .debug_logger import debug_logger
 except ImportError:
     from debug_logger import debug_logger
 
-project_root = Path(__file__).parent.parent
+project_root = Path(__file__).resolve().parent.parent
 sys.path.append(str(project_root))
 
 from comprehensive_element_cloner import ComprehensiveElementCloner
@@ -26,9 +25,9 @@ class FileBasedElementCloner:
         Initialize with output directory for clone files.
 
         Args:
-            output_dir (str | None): Directory to save clone files.
+            output_dir (Optional[str]): Directory to save clone files.
                 Defaults to <project_root>/element_clones (absolute path,
-                avoids cwd-dependent failures when launched from Claude Desktop).
+                avoids startup failures when the host process uses a read-only cwd).
         """
         if output_dir is None:
             self.output_dir = Path(__file__).resolve().parent.parent / "element_clones"
