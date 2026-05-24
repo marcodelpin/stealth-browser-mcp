@@ -154,6 +154,12 @@ Restart your MCP client and ask your agent:
 
 > "Use stealth-browser to navigate to https://example.com and take a screenshot."
 
+### Agent Skill
+
+This repo includes an agent skill at `skills/stealth-browser-mcp` for clients that support Codex-style skills. It teaches agents the recommended tool order, state checks, pre-document CDP script usage, network debugging flow, and browser cleanup rules.
+
+Use the skill when an LLM struggles to choose the right MCP tool or forgets to verify browser state after actions. If your client does not load repo-local skills automatically, add or symlink `skills/stealth-browser-mcp` into your client skills directory.
+
 ---
 
 ## Modular Architecture
