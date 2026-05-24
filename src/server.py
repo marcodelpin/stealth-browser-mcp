@@ -2324,6 +2324,44 @@ async def execute_cdp_command(
 
 
 @section_tool("cdp-functions")
+async def add_script_to_evaluate_on_new_document(
+    instance_id: str,
+    source: str,
+    world_name: Optional[str] = None,
+    include_command_line_api: Optional[bool] = None,
+    run_immediately: bool = True,
+) -> Dict[str, Any]:
+    """
+    Install JavaScript that runs before page scripts on each new document.
+
+    Args:
+        instance_id (str): Browser instance ID.
+        source (str): JavaScript source to evaluate before page scripts.
+        world_name (Optional[str]): Isolated world name, or None for the main world.
+        include_command_line_api (Optional[bool]): Whether command line API is available.
+        run_immediately (bool): Whether to run the script in existing contexts too.
+
+    Returns:
+        Dict[str, Any]: Result with success state and script identifier.
+    """
+    tab = await browser_manager.get_tab(instance_id)
+    if not tab:
+        return {"success": False, "error": f"Instance not found: {instance_id}"}
+    try:
+        await tab.send(uc.cdp.page.enable())
+        result = await tab.send(uc.cdp.page.add_script_to_evaluate_on_new_document(
+            source=source,
+            world_name=world_name,
+            include_command_line_api=include_command_line_api,
+            run_immediately=run_immediately,
+        ))
+        return {"success": True, "identifier": str(result)}
+    except Exception as e:
+        debug_logger.log_error("server", "add_script_to_evaluate_on_new_document", e)
+        return {"success": False, "error": str(e)}
+
+
+@section_tool("cdp-functions")
 async def get_execution_contexts(
     instance_id: str
 ) -> List[Dict[str, Any]]:

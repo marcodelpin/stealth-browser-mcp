@@ -100,9 +100,27 @@ class CDPFunctionExecutor:
             debug_logger.log_error("cdp_function_executor", "enable_runtime", e)
             return False
 
+    async def enable_page(self, tab: Tab) -> bool:
+        """
+        Enables CDP Page domain for a tab.
+
+        Args:
+            tab (Tab): The browser tab.
+
+        Returns:
+            bool: True if enabled, False otherwise.
+        """
+        try:
+            await tab.send(uc.cdp.page.enable())
+            debug_logger.log_info("cdp_function_executor", "enable_page", "Page enabled for tab")
+            return True
+        except Exception as e:
+            debug_logger.log_error("cdp_function_executor", "enable_page", e)
+            return False
+
     async def list_cdp_commands(self) -> List[str]:
         """
-        Lists all available CDP Runtime commands.
+        Lists CDP commands the generic executor will accept.
 
         Returns:
             List[str]: List of command names.
@@ -114,27 +132,69 @@ class CDPFunctionExecutor:
             "releaseObject", "releaseObjectGroup", "terminateExecution",
             "setAsyncCallStackDepth", "setCustomObjectFormatterEnabled",
             "setMaxCallStackSizeToCapture", "runIfWaitingForDebugger",
-            "discardConsoleEntries", "getHeapUsage", "getIsolateId"
+            "discardConsoleEntries", "getHeapUsage", "getIsolateId",
+            "addScriptToEvaluateOnNewDocument",
+            "removeScriptToEvaluateOnNewDocument",
+            "reload", "navigate", "stopLoading", "getFrameTree",
+            "setBypassCSP", "setDocumentContent",
+            "page.enable", "page.addScriptToEvaluateOnNewDocument",
+            "page.removeScriptToEvaluateOnNewDocument",
+            "page.reload", "page.navigate", "page.stopLoading",
+            "page.getFrameTree", "page.setBypassCSP", "page.setDocumentContent",
         ]
         return commands
 
+    def _resolve_cdp_method(self, command: str):
+        """
+        Resolve a CDP command name across Runtime and Page domains.
+
+        Args:
+            command (str): CDP command name with optional domain prefix.
+
+        Returns:
+            tuple: Domain name and resolved method, or None values.
+        """
+        cdp_domains = {
+            "runtime": uc.cdp.runtime,
+            "page": uc.cdp.page,
+        }
+        raw_command = command.strip()
+        explicit_domain = None
+        if "." in raw_command:
+            domain_part, raw_command = raw_command.split(".", 1)
+            explicit_domain = domain_part.strip().lower()
+        snake = "".join(["_" + c.lower() if c.isupper() else c for c in raw_command]).lstrip("_")
+        domain_names = [explicit_domain] if explicit_domain else ["runtime", "page"]
+        for domain_name in domain_names:
+            domain = cdp_domains.get(domain_name)
+            if domain is None:
+                continue
+            for name in (raw_command, snake):
+                method = getattr(domain, name, None)
+                if callable(method):
+                    return domain_name, method
+        return None, None
+
     async def execute_cdp_command(self, tab: Tab, command: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Executes any CDP Runtime command with given parameters.
+        Executes a CDP command (Runtime or Page domain) with given parameters.
 
         Args:
             tab (Tab): The browser tab.
-            command (str): CDP command name.
-            params (Dict[str, Any]): Parameters for the command.
+            command (str): CDP command name (camelCase or snake_case).
+            params (Dict[str, Any]): Parameters for the command (snake_case keys).
 
         Returns:
             Dict[str, Any]: Result of the command execution.
         """
         try:
-            await self.enable_runtime(tab)
-            cdp_method = getattr(uc.cdp.runtime, command, None)
+            cdp_domain, cdp_method = self._resolve_cdp_method(command)
             if not cdp_method:
                 raise ValueError(f"Unknown CDP command: {command}")
+            if cdp_domain == "page":
+                await self.enable_page(tab)
+            else:
+                await self.enable_runtime(tab)
             result = await tab.send(cdp_method(**params))
             debug_logger.log_info("cdp_function_executor", "execute_cdp_command", f"Executed {command} with params: {params}")
             return {
