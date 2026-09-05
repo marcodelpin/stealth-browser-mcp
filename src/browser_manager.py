@@ -412,6 +412,10 @@ class BrowserManager:
             })
 
         except Exception as e:
+            try:
+                await dynamic_hook_system.cleanup_instance(instance_id)
+            except Exception:
+                pass
             if browser is not None:
                 try:
                     await self._stop_browser(browser)
@@ -497,6 +501,8 @@ class BrowserManager:
                 data = self._instances[instance_id]
                 browser = data['browser']
                 instance = data['instance']
+
+                await dynamic_hook_system.cleanup_instance(instance_id)
 
                 try:
                     if hasattr(browser, 'tabs') and browser.tabs:
@@ -611,6 +617,7 @@ class BrowserManager:
                     if instance_id in self._instances:
                         data = self._instances[instance_id]
                         data['instance'].state = BrowserState.CLOSED
+                        dynamic_hook_system.cancel_instance(instance_id)
                         process_cleanup.kill_browser_process(instance_id)
                         process_cleanup.finalize_browser_process(instance_id)
                         process_cleanup.cleanup_deferred_profiles()

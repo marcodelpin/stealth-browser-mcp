@@ -163,6 +163,8 @@ class DynamicHookSystem:
         self.hooks: Dict[str, DynamicHook] = {}
         self.instance_hooks: Dict[str, List[str]] = {}  # instance_id -> list of hook_ids
         self._lock = asyncio.Lock()
+        self._request_tasks: Dict[str, set[asyncio.Task]] = {}
+        self._interception_handlers: Dict[str, tuple[Any, Callable]] = {}
     
     async def setup_interception(self, tab, instance_id: str):
         """Set up request and response interception for a browser tab."""
@@ -213,10 +215,27 @@ class DynamicHookSystem:
             
             await tab.send(uc.cdp.fetch.enable(patterns=all_patterns))
             
-            tab.add_handler(
-                uc.cdp.fetch.RequestPaused,
-                lambda event: asyncio.create_task(self._on_request_paused(tab, event, instance_id))
-            )
+            def schedule_request(event):
+                task = asyncio.create_task(
+                    self._on_request_paused(tab, event, instance_id)
+                )
+                tasks = self._request_tasks.setdefault(instance_id, set())
+                tasks.add(task)
+                task.add_done_callback(tasks.discard)
+
+            previous = self._interception_handlers.pop(instance_id, None)
+            if previous:
+                previous_tab, previous_handler = previous
+                try:
+                    previous_tab.remove_handler(
+                        uc.cdp.fetch.RequestPaused,
+                        previous_handler,
+                    )
+                except Exception:
+                    pass
+
+            tab.add_handler(uc.cdp.fetch.RequestPaused, schedule_request)
+            self._interception_handlers[instance_id] = (tab, schedule_request)
             
             debug_logger.log_info("dynamic_hook_system", "setup_interception", f"Set up interception for instance {instance_id} with {len(all_patterns)} patterns ({len(request_patterns)} request, {len(response_patterns)} response)")
             
@@ -333,6 +352,34 @@ class DynamicHookSystem:
             except:
                 pass
     
+    def _detach_instance(self, instance_id: str) -> List[asyncio.Task]:
+        """Detach interception and cancel pending request tasks for an instance."""
+        handler_entry = self._interception_handlers.pop(instance_id, None)
+        if handler_entry:
+            tab, handler = handler_entry
+            try:
+                tab.remove_handler(uc.cdp.fetch.RequestPaused, handler)
+            except Exception:
+                pass
+
+        tasks = list(self._request_tasks.pop(instance_id, set()))
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+
+        self.instance_hooks.pop(instance_id, None)
+        return tasks
+
+    async def cleanup_instance(self, instance_id: str) -> None:
+        """Clean up dynamic-hook interception state for a browser instance."""
+        tasks = self._detach_instance(instance_id)
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+    def cancel_instance(self, instance_id: str) -> None:
+        """Cancel dynamic-hook work during forced synchronous cleanup."""
+        self._detach_instance(instance_id)
+
     async def create_hook(self, name: str, requirements: Dict[str, Any], function_code: str, 
                          instance_ids: Optional[List[str]] = None, priority: int = 100) -> str:
         """Create a new dynamic hook."""
