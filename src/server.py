@@ -42,6 +42,7 @@ from dynamic_hook_ai_interface import dynamic_hook_ai
 from persistent_storage import persistent_storage
 from progressive_element_cloner import progressive_element_cloner
 from response_handler import response_handler
+from stdio_guard import install_stdio_guard
 from platform_utils import validate_browser_environment, get_platform_info
 from process_cleanup import process_cleanup
 
@@ -711,9 +712,10 @@ async def execute_script(
         raise Exception(f"Instance not found: {instance_id}")
     try:
         result = await dom_handler.execute_script(tab, script, args)
+        bounded = response_handler.handle_response(result, "script_result")
         return {
             "success": True,
-            "result": result,
+            "result": bounded,
             "error": None
         }
     except Exception as e:
@@ -2995,4 +2997,5 @@ if __name__ == "__main__":
     if args.transport == "http":
         mcp.run(transport="http", host=args.host, port=args.port)
     else:
+        install_stdio_guard()
         mcp.run(transport="stdio")
