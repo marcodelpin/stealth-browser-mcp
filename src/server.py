@@ -175,11 +175,11 @@ async def spawn_browser(
     viewport_width: int = 1920,
     viewport_height: int = 1080,
     proxy: Optional[str] = None,
-    browser_args: List[str] = None,
+    browser_args: Optional[List[str]] = None,
     timezone_id: Optional[str] = None,
     idle_timeout_seconds: Optional[int] = None,
-    block_resources: List[str] = None,
-    extra_headers: Dict[str, str] = None,
+    block_resources: Optional[List[str]] = None,
+    extra_headers: Optional[Dict[str, str]] = None,
     user_data_dir: Optional[str] = None,
     sandbox: Optional[Any] = None
 ) -> Dict[str, Any]:
@@ -2336,7 +2336,7 @@ async def list_cdp_commands() -> List[str]:
 async def execute_cdp_command(
     instance_id: str,
     command: str,
-    params: Dict[str, Any] = None
+    params: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
     """
     Execute any CDP Runtime command with given parameters.
@@ -2434,7 +2434,7 @@ async def get_execution_contexts(
 @section_tool("cdp-functions")
 async def discover_global_functions(
     instance_id: str,
-    context_id: str = None
+    context_id: Optional[str] = None
 ) -> List[Dict[str, Any]]:
     """
     Discover all global JavaScript functions available in the page.
@@ -2520,7 +2520,7 @@ async def discover_object_methods(
 async def call_javascript_function(
     instance_id: str,
     function_path: str,
-    args: List[Any] = None
+    args: Optional[List[Any]] = None
 ) -> Dict[str, Any]:
     """
     Call a JavaScript function with arguments.
@@ -2564,7 +2564,7 @@ async def inspect_function_signature(
 async def inject_and_execute_script(
     instance_id: str,
     script_code: str,
-    context_id: str = None
+    context_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Inject and execute custom JavaScript code.
@@ -2693,7 +2693,7 @@ async def execute_python_in_browser(
 
 @section_tool("cdp-functions")
 async def get_function_executor_info(
-    instance_id: str = None
+    instance_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Get information about the CDP function executor state.
