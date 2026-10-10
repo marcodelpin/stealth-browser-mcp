@@ -3,15 +3,15 @@
 import json
 import asyncio
 import os
-import sys
 import time
 import uuid
 from typing import Any, Dict, Optional, List
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import nodriver as uc
 from nodriver import Browser, Tab
 
+import cdp_raw
 from debug_logger import debug_logger
 from models import BrowserInstance, BrowserState, BrowserOptions, PageState
 from persistent_storage import persistent_storage
@@ -354,7 +354,7 @@ class BrowserManager:
 
             if options.extra_headers:
                 await tab.send(uc.cdp.network.set_extra_http_headers(
-                    headers=options.extra_headers
+                    headers=uc.cdp.network.Headers(options.extra_headers)
                 ))
 
             await tab.set_window_size(
@@ -412,7 +412,7 @@ class BrowserManager:
                 'title': 'Browser Instance'
             })
 
-        except Exception as e:
+        except BaseException as e:
             try:
                 await dynamic_hook_system.cleanup_instance(instance_id)
             except Exception:
@@ -432,7 +432,9 @@ class BrowserManager:
             except Exception:
                 pass
             instance.state = BrowserState.ERROR
-            raise Exception(f"Failed to spawn browser: {str(e)}")
+            if not isinstance(e, Exception):
+                raise
+            raise Exception(f"Failed to spawn browser: {str(e)}") from e
 
         return instance
     
@@ -774,37 +776,70 @@ class BrowserManager:
         )
 
     @staticmethod
+    def _navigation_event_type(wait_until: str) -> type:
+        """
+        Map a wait condition to the CDP page event that signals it.
+
+        Args:
+            wait_until (str): Desired wait condition.
+
+        Returns:
+            type: CDP event class to listen for.
+        """
+        if wait_until == "domcontentloaded":
+            return uc.cdp.page.DomContentEventFired
+        return uc.cdp.page.LoadEventFired
+
+    @staticmethod
+    def _remove_tab_handler(tab: Tab, event_type: type, handler: Any) -> None:
+        """
+        Remove one event handler from a tab.
+
+        nodriver's remove_handler deletes every handler registered for the
+        event type, so the callback is removed from the handler list directly.
+
+        Args:
+            tab (Tab): Browser tab.
+            event_type (type): CDP event class the handler was registered for.
+            handler (Any): Callback to remove.
+        """
+        callbacks = tab.handlers.get(event_type)
+        if callbacks and handler in callbacks:
+            callbacks.remove(handler)
+
+    @staticmethod
     async def _wait_for_navigation_condition(
-        tab: Tab,
         wait_until: str,
         timeout_seconds: float,
+        fired: asyncio.Event,
     ) -> None:
         """
         Wait for a navigation milestone within the remaining timeout budget.
 
+        Part of the budget is kept in reserve so a page that never fires its
+        load event still returns its URL and title instead of failing.
+
         Args:
-            tab (Tab): Browser tab.
             wait_until (str): Desired wait condition.
             timeout_seconds (float): Remaining timeout budget in seconds.
+            fired (asyncio.Event): Set by the page event handler registered before navigation.
         """
         if timeout_seconds <= 0:
             raise asyncio.TimeoutError("Navigation wait budget exhausted")
-
-        if wait_until == "domcontentloaded":
-            await asyncio.wait_for(
-                tab.wait(uc.cdp.page.DomContentEventFired),
-                timeout=timeout_seconds,
-            )
-            return
 
         if wait_until == "networkidle":
             await asyncio.sleep(min(timeout_seconds, 2.0))
             return
 
-        await asyncio.wait_for(
-            tab.wait(uc.cdp.page.LoadEventFired),
-            timeout=timeout_seconds,
-        )
+        wait_budget = timeout_seconds - min(2.0, timeout_seconds * 0.2)
+        try:
+            await asyncio.wait_for(fired.wait(), timeout=wait_budget)
+        except asyncio.TimeoutError:
+            debug_logger.log_warning(
+                "browser_manager",
+                "navigate",
+                f"Page did not reach '{wait_until}' within {wait_budget:.1f}s, returning current state",
+            )
 
     async def navigate(
         self,
@@ -844,22 +879,22 @@ class BrowserManager:
                 raise Exception(f"Instance not found: {instance_id}")
 
             start_time = time.monotonic()
+            fired = asyncio.Event()
+            event_type = self._navigation_event_type(wait_until)
+            handler = lambda _event: fired.set()
+            tab.add_handler(event_type, handler)
 
             try:
-                if referrer:
-                    await tab.send(
-                        uc.cdp.network.set_extra_http_headers(
-                            headers={"Referer": referrer}
-                        )
-                    )
-
-                await asyncio.wait_for(tab.get(url), timeout=timeout_seconds)
+                await asyncio.wait_for(
+                    tab.send(uc.cdp.page.navigate(url, referrer=referrer)),
+                    timeout=timeout_seconds,
+                )
 
                 elapsed = time.monotonic() - start_time
                 await self._wait_for_navigation_condition(
-                    tab,
                     wait_until,
                     timeout_seconds - elapsed,
+                    fired,
                 )
 
                 elapsed = time.monotonic() - start_time
@@ -904,6 +939,8 @@ class BrowserManager:
                             f"Navigation to {url} timed out after {timeout}ms"
                         ) from error
                     raise
+            finally:
+                self._remove_tab_handler(tab, event_type, handler)
 
     async def get_tab(
         self,
@@ -1055,7 +1092,7 @@ class BrowserManager:
         except Exception:
             return False
 
-    async def update_instance_state(self, instance_id: str, url: str = None, title: str = None):
+    async def update_instance_state(self, instance_id: str, url: Optional[str] = None, title: Optional[str] = None):
         """
         Update instance state after navigation or action.
 
@@ -1143,7 +1180,7 @@ class BrowserManager:
             title = await tab.evaluate("document.title")
             ready_state = await tab.evaluate("document.readyState")
 
-            cookies = self._cookies_to_dicts(await tab.send(uc.cdp.network.get_cookies()))
+            cookies = self._cookies_to_dicts(await cdp_raw.get_cookies(tab))
 
             local_storage = {}
             session_storage = {}

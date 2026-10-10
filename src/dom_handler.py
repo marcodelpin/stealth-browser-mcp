@@ -6,11 +6,29 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from nodriver import Tab, Element
+from nodriver import Tab
 from debug_logger import debug_logger
 from file_upload_security import validate_upload_paths
-from models import ElementInfo, ElementAction
+from js_values import evaluate_to_python
+from models import ElementInfo
 
+
+async def evaluate_or_raise(tab: Tab, expression: str, await_promise: bool = False) -> Any:
+    """
+    Evaluate JavaScript and raise when the script throws.
+
+    Args:
+        tab (Tab): The browser tab object.
+        expression (str): JavaScript expression to evaluate.
+        await_promise (bool): Await the result when it is a Promise.
+
+    Returns:
+        Any: Plain Python value produced by the script.
+    """
+    value, error = await evaluate_to_python(tab, expression, await_promise=await_promise)
+    if error:
+        raise Exception(f"JavaScript error: {error}")
+    return value
 
 
 MODIFIER_ALT = 1
@@ -371,7 +389,6 @@ class DOMHandler:
                 await asyncio.sleep(0.1)
 
             if parse_newlines:
-                from nodriver import cdp
                 lines = text.split('\n')
                 for i, line in enumerate(lines):
                     for char in line:
@@ -660,35 +677,35 @@ class DOMHandler:
             if not select_element:
                 raise Exception(f"Select element not found: {selector}")
 
-            if text is not None:
-                await select_element.send_keys(text)
-                return True
-
             if value is not None:
-                safe_selector = json.dumps(selector)
-                safe_value = json.dumps(value)
-                await tab.evaluate(f"""
-                    const select = document.querySelector({safe_selector});
-                    if (select) {{
-                        select.value = {safe_value};
-                        select.dispatchEvent(new Event('change', {{bubbles: true}}));
-                    }}
-                """)
-                return True
-
+                criteria = {"value": str(value)}
+            elif text is not None:
+                criteria = {"text": str(text)}
             elif index is not None:
-                safe_selector = json.dumps(selector)
-                safe_index = int(index)
-                await tab.evaluate(f"""
-                    const select = document.querySelector({safe_selector});
-                    if (select && {safe_index} >= 0 && {safe_index} < select.options.length) {{
-                        select.selectedIndex = {safe_index};
-                        select.dispatchEvent(new Event('change', {{bubbles: true}}));
-                    }}
-                """)
-                return True
+                criteria = {"index": int(index)}
+            else:
+                raise Exception("No selection criteria provided (value, text, or index)")
 
-            raise Exception("No selection criteria provided (value, text, or index)")
+            selected = await evaluate_or_raise(tab, f"""
+                (() => {{
+                    const select = document.querySelector({json.dumps(selector)});
+                    const criteria = {json.dumps(criteria)};
+                    if (!select || !select.options) return false;
+                    const options = Array.from(select.options);
+                    let target = -1;
+                    if ('value' in criteria) target = options.findIndex(o => o.value === criteria.value);
+                    else if ('text' in criteria) target = options.findIndex(o => o.text.trim() === criteria.text.trim());
+                    else if (criteria.index >= 0 && criteria.index < options.length) target = criteria.index;
+                    if (target < 0) return false;
+                    select.selectedIndex = target;
+                    select.dispatchEvent(new Event('input', {{bubbles: true}}));
+                    select.dispatchEvent(new Event('change', {{bubbles: true}}));
+                    return true;
+                }})()
+            """)
+            if not selected:
+                raise Exception(f"No matching option for {criteria} in {selector}")
+            return True
 
         except Exception as e:
             raise Exception(f"Failed to select option: {str(e)}")
@@ -766,7 +783,7 @@ class DOMHandler:
 
         while time.time() - start_time < timeout_seconds:
             try:
-                element = await tab.select(selector)
+                element = await tab.query_selector(selector)
 
                 if element:
                     if visible:
@@ -809,22 +826,23 @@ class DOMHandler:
         """
         Execute JavaScript in page context.
 
+        Without args, the script is evaluated as an expression and its value
+        is returned. With args, the script is used as a function body, so it
+        must use return and reads its arguments through the arguments object.
+
         Args:
             tab (Tab): The browser tab object.
             script (str): JavaScript code to execute.
             args (Optional[List[Any]]): Arguments for the script.
 
         Returns:
-            Any: Result of script execution.
+            Any: Result of script execution as plain JSON-like data.
         """
         try:
             if args:
                 serialized_args = ",".join(json.dumps(a) for a in args)
-                result = await tab.evaluate(f'(function() {{ {script} }})({serialized_args})')
-            else:
-                result = await tab.evaluate(script)
-
-            return result
+                return await evaluate_or_raise(tab, f'(function() {{ {script} }})({serialized_args})')
+            return await evaluate_or_raise(tab, script)
 
         except Exception as e:
             raise Exception(f"Failed to execute script: {str(e)}")
@@ -900,15 +918,16 @@ class DOMHandler:
         """
         try:
             behavior = "'smooth'" if smooth else "'instant'"
+            distance = abs(int(amount))
 
             if direction == "down":
-                script = f"window.scrollBy({{top: {amount}, left: 0, behavior: {behavior}}})"
+                script = f"window.scrollBy({{top: {distance}, left: 0, behavior: {behavior}}})"
             elif direction == "up":
-                script = f"window.scrollBy({{top: -{amount}, left: 0, behavior: {behavior}}})"
+                script = f"window.scrollBy({{top: {-distance}, left: 0, behavior: {behavior}}})"
             elif direction == "right":
-                script = f"window.scrollBy({{top: 0, left: {amount}, behavior: {behavior}}})"
+                script = f"window.scrollBy({{top: 0, left: {distance}, behavior: {behavior}}})"
             elif direction == "left":
-                script = f"window.scrollBy({{top: 0, left: -{amount}, behavior: {behavior}}})"
+                script = f"window.scrollBy({{top: 0, left: {-distance}, behavior: {behavior}}})"
             elif direction == "top":
                 script = f"window.scrollTo({{top: 0, left: 0, behavior: {behavior}}})"
             elif direction == "bottom":
@@ -916,7 +935,7 @@ class DOMHandler:
             else:
                 raise ValueError(f"Invalid scroll direction: {direction}")
 
-            await tab.evaluate(script)
+            await evaluate_or_raise(tab, script)
             await asyncio.sleep(0.5 if smooth else 0.1)
 
             return True
