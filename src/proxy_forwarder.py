@@ -9,7 +9,7 @@ import ssl
 from ssl import SSLContext
 from struct import calcsize, error as struct_error, pack, unpack
 from typing import Optional
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
 from debug_logger import debug_logger
 
@@ -58,8 +58,8 @@ class AuthenticatedProxyForwarder:
         self.ssl_context = ssl_context
         self.scheme = parsed.scheme
         self.use_ssl = parsed.scheme == "https"
-        self.username = parsed.username
-        self.password = parsed.password
+        self.username = unquote(parsed.username)
+        self.password = unquote(parsed.password)
         self.fw_host = parsed.hostname
         self.fw_port = parsed.port
         self.host = "127.0.0.1"

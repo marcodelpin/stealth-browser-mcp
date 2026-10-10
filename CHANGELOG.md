@@ -9,8 +9,27 @@ The format is based on Keep a Changelog and adheres to Semantic Versioning where
 - **`press_key()` tool** - Presses real keys through CDP `Input.dispatchKeyEvent`, producing trusted `keydown`/`keypress`/`keyup` events. Supports named keys (Enter, Tab, Escape, arrows, Backspace, Delete, Home, End, PageUp, PageDown, Space, F1-F12), single printable characters, modifier combinations (Shift, Control/Ctrl, Alt, Meta/Cmd), optional focus selector, repeat count, and inter-press delay.
 - **Tests** - `tests/test_press_key.py` covers the key-to-CDP mapping, the modifier bitmask, and the dispatch sequence. A browser-backed test asserting `isTrusted` runs when `STEALTH_BROWSER_TESTS=1` is set.
 
+- **Tests** - `tests/test_js_values.py`, `tests/test_element_cloners.py`, and `tests/test_hooks_and_proxy.py` cover result conversion, template escaping, cloner data paths, hook matching, proxy parsing, and debug log export. CI now runs the unit test suite.
+
+### Fixed
+- **Script results** - `execute_script` returns plain JSON values instead of raw CDP deep-serialized nodes, and reports JavaScript exceptions as failures instead of success.
+- **Element cloning** - Selectors are JSON-escaped in every extractor, so quotes and backslashes work. Progressive `expand_*` tools, `extract_complete_element_to_file` summaries, CDP matched styles, and `clone_element_to_file` sub-extractors now return real data. File tools no longer save extraction errors as successful files.
+- **Broken tools** - `extract_element_assets`, `extract_related_files`, and `discover_object_methods` no longer crash on an invalid `await`. `set_cookie(same_site=...)`, `spawn_browser(extra_headers=...)`, and `navigate(referrer=...)` no longer fail on CDP type errors. Browser state, cookie, and network resources serialize correctly.
+- **Navigation** - `wait_until="load"` and `"domcontentloaded"` wait for the page event instead of returning immediately. The referrer applies to the navigation only and no longer replaces spawn-time headers.
+- **Page tools** - `reload_page` honors `ignore_cache`, `take_screenshot` honors `format` and `full_page`, `select_option` works by text and can be called repeatedly, `scroll_page` accepts negative amounts, and `wait_for_element` respects short timeouts.
+- **Network capture** - Resource types are recorded, so capture filters and type searches work. `response_contains` only matches captured bodies. Captured requests are capped per instance and bodies are read after loading finishes.
+- **Dynamic hooks** - Resource type and custom conditions match as documented, `|` alternatives work in URL and method requirements, global hooks apply to new instances, response headers are passed to hooks, compile errors are reported, and simple hook values can no longer inject code.
+- **Process cleanup** - Owner liveness checks work on Windows, the shared PID file is written atomically, and a reused PID is never killed during recovery.
+- **Proxies** - Percent-encoded proxy credentials are decoded, and proxy errors no longer include passwords.
+- **Debug logs** - Exporting logs no longer deadlocks the server, log lists are capped, and `max_errors=0` returns no entries.
+- **Python in browser** - The final expression is translated once instead of being re-run as raw Python.
+- `get_instance_state` accepts fractional `devicePixelRatio` values.
+
 ### Changed
 - `element-interaction` section now exposes 13 tools; full surface is 98 tools, minimal surface is 21.
+- HTTP transport binds to `127.0.0.1` by default and warns on stderr when bound to another host without an auth token.
+- `hot_reload` refuses to run while browser instances are open, so they are not orphaned.
+- Removed the unused `response_stage_hooks` module and unused JavaScript templates.
 
 ### Notes
 - `type_text(parse_newlines=True)` fakes Enter by writing `\n` into the input value and dispatching an untrusted JavaScript `KeyboardEvent`. React-select and typeahead widgets (Greenhouse, Ashby, Lever, Workday) ignore untrusted events and drop the value on blur. Use `press_key()` for those fields.

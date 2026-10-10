@@ -4,8 +4,8 @@ import asyncio
 import base64
 import importlib
 import json
+import ipaddress
 import os
-import signal
 import sys
 import tempfile
 from collections import defaultdict
@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional, Union
 
 import nodriver as uc
 from fastmcp import FastMCP
+from pydantic_core import to_json
 
 from browser_manager import BrowserManager
 from cdp_element_cloner import CDPElementCloner
@@ -29,15 +30,8 @@ from http_security import (
     create_http_auth_provider,
     get_http_auth_token,
 )
-from models import (
-    BrowserOptions,
-    NavigationOptions,
-    ScriptResult,
-    BrowserState,
-    PageState,
-)
+from models import BrowserOptions
 from network_interceptor import NetworkInterceptor
-from dynamic_hook_system import dynamic_hook_system
 from dynamic_hook_ai_interface import dynamic_hook_ai
 from persistent_storage import persistent_storage
 from progressive_element_cloner import progressive_element_cloner
@@ -76,9 +70,23 @@ DEBUG_LOGGING_ENABLED = (
 )
 HTTP_AUTH_TOKEN = get_http_auth_token()
 
-def is_section_enabled(section: str) -> bool:
-    """Check if a tool section is enabled."""
-    return section not in DISABLED_SECTIONS
+def is_loopback_host(host: str) -> bool:
+    """
+    Check whether an HTTP bind host only accepts local connections.
+
+    Args:
+        host (str): Host name or IP address passed to --host.
+
+    Returns:
+        bool: True for localhost and loopback addresses.
+    """
+    if host.lower() == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
 
 def section_tool(section: str):
     """Decorator that registers tools and tracks section membership."""
@@ -244,7 +252,10 @@ async def spawn_browser(
             "spawn_diagnostics": spawn_diagnostics or {},
         }
     except Exception as e:
-        raise Exception(f"Failed to spawn browser: {str(e)}")
+        message = str(e)
+        if not message.startswith("Failed to spawn browser"):
+            message = f"Failed to spawn browser: {message}"
+        raise Exception(message) from e
 
 @section_tool("browser-management")
 async def list_instances() -> List[Dict[str, Any]]:
@@ -389,7 +400,7 @@ async def reload_page(instance_id: str, ignore_cache: bool = False) -> bool:
     tab = await browser_manager.get_tab(instance_id)
     if not tab:
         raise Exception(f"Instance not found: {instance_id}")
-    await tab.reload()
+    await tab.reload(ignore_cache=ignore_cache)
     return True
 
 @section_tool("element-interaction")
@@ -772,22 +783,28 @@ async def take_screenshot(
     """
     from PIL import Image
     import io
-    
+
+    format = format.lower()
+    if format == "jpg":
+        format = "jpeg"
+    if format not in ("png", "jpeg"):
+        raise ValueError(f"Unsupported screenshot format: {format}. Use 'png' or 'jpeg'.")
+
     tab = await browser_manager.get_tab(instance_id)
     if not tab:
         raise Exception(f"Instance not found: {instance_id}")
-    
+
     if file_path:
         save_path = Path(file_path)
         save_path.parent.mkdir(parents=True, exist_ok=True)
-        await tab.save_screenshot(save_path)
+        await tab.save_screenshot(save_path, format=format, full_page=full_page)
         return f"Screenshot saved. AI agents should use the Read tool to view this image: {str(save_path.absolute())}"
     
     with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_file:
         tmp_path = Path(tmp_file.name)
     
     try:
-        await tab.save_screenshot(tmp_path)
+        await tab.save_screenshot(tmp_path, format=format, full_page=full_page)
         
         with Image.open(tmp_path) as img:
             if img.mode in ('RGBA', 'LA', 'P') and format.lower() == 'jpeg':
@@ -925,7 +942,6 @@ async def get_response_content(
         try:
             return body.decode('utf-8')
         except UnicodeDecodeError:
-            import base64
             return base64.b64encode(body).decode('utf-8')
     return None
 
@@ -1141,7 +1157,10 @@ async def set_cookie(
     if domain:
         cookie["domain"] = domain
     if same_site:
-        cookie["same_site"] = same_site
+        try:
+            cookie["same_site"] = uc.cdp.network.CookieSameSite(same_site.capitalize())
+        except ValueError:
+            raise ValueError(f"Invalid same_site value: {same_site}. Use 'Strict', 'Lax', or 'None'.")
     return await network_interceptor.set_cookie(tab, cookie)
 
 
@@ -1179,7 +1198,7 @@ async def get_browser_state_resource(instance_id: str) -> str:
     """
     state = await browser_manager.get_page_state(instance_id)
     if state:
-        return json.dumps(state.dict(), indent=2)
+        return to_json(state, indent=2).decode()
     return json.dumps({"error": "Instance not found"})
 
 
@@ -1197,7 +1216,7 @@ async def get_cookies_resource(instance_id: str) -> str:
     tab = await browser_manager.get_tab(instance_id)
     if tab:
         cookies = await network_interceptor.get_cookies(tab)
-        return json.dumps(cookies, indent=2)
+        return to_json(cookies, indent=2).decode()
     return json.dumps({"error": "Instance not found"})
 
 
@@ -1213,7 +1232,7 @@ async def get_network_resource(instance_id: str) -> str:
         str: JSON string of network requests.
     """
     requests = await network_interceptor.list_requests(instance_id)
-    return json.dumps([req.dict() for req in requests], indent=2)
+    return to_json(requests, indent=2).decode()
 
 
 @mcp.resource("browser://{instance_id}/console")
@@ -1319,7 +1338,7 @@ async def export_debug_logs(
         )
         return filepath
     except asyncio.TimeoutError:
-        return f"Export timeout - file too large. Try with smaller limits or 'gzip-pickle' format."
+        return "Export timeout - file too large. Try with smaller limits or 'gzip-pickle' format."
 
 
 @section_tool("debugging")
@@ -1618,7 +1637,7 @@ async def extract_element_assets(
         include_fonts=include_fonts,
         fetch_external=fetch_external
     )
-    return await response_handler.handle_response(result, f"element_assets_{instance_id}_{selector.replace(' ', '_')}")
+    return response_handler.handle_response(result, f"element_assets_{instance_id}_{selector.replace(' ', '_')}")
 
 
 @section_tool("element-extraction")
@@ -1689,7 +1708,7 @@ async def extract_related_files(
         follow_imports=follow_imports,
         max_depth=max_depth
     )
-    return await response_handler.handle_response(result, f"related_files_{instance_id}")
+    return response_handler.handle_response(result, f"related_files_{instance_id}")
 
 
 @section_tool("element-extraction")
@@ -1751,10 +1770,20 @@ async def hot_reload() -> str:
     """
     Hot reload all modules without restarting the server.
 
+    Reloading replaces the browser manager and network interceptor, so it is
+    refused while browser instances are open to avoid orphaning them.
+
     Returns:
         str: Status message.
     """
+    global browser_manager, network_interceptor, dom_handler, debug_logger
     try:
+        active_instances = await browser_manager.list_instances()
+        if active_instances:
+            return (
+                f"Hot reload refused: {len(active_instances)} browser instance(s) are open. "
+                "Close them first so they are not orphaned."
+            )
         modules_to_reload = [
             'browser_manager',
             'network_interceptor',
@@ -1768,17 +1797,15 @@ async def hot_reload() -> str:
                 importlib.reload(sys.modules[module_name])
                 reloaded_modules.append(module_name)
                 if module_name == 'browser_manager':
-                    global browser_manager, BrowserManager
-                    browser_manager = BrowserManager()
+                    await browser_manager.stop_idle_reaper()
+                    browser_manager = sys.modules['browser_manager'].BrowserManager()
+                    await browser_manager.start_idle_reaper()
                 elif module_name == 'network_interceptor':
-                    global network_interceptor, NetworkInterceptor
-                    network_interceptor = NetworkInterceptor()
+                    network_interceptor = sys.modules['network_interceptor'].NetworkInterceptor()
                 elif module_name == 'dom_handler':
-                    global dom_handler, DOMHandler
-                    dom_handler = DOMHandler()
+                    dom_handler = sys.modules['dom_handler'].DOMHandler()
                 elif module_name == 'debug_logger':
-                    global debug_logger
-                    from debug_logger import debug_logger
+                    debug_logger = sys.modules['debug_logger'].debug_logger
         return f"Hot reload completed. Reloaded modules: {', '.join(reloaded_modules)}"
     except Exception as e:
         return f"Hot reload failed: {str(e)}"
@@ -1805,9 +1832,9 @@ async def reload_status() -> str:
         for module_name in modules_to_check:
             if module_name in sys.modules:
                 module = sys.modules[module_name]
-                modules_info.append(f"✅ {module_name}: {getattr(module, '__file__', 'built-in')}")
+                modules_info.append(f"[loaded] {module_name}: {getattr(module, '__file__', 'built-in')}")
             else:
-                modules_info.append(f"❌ {module_name}: Not loaded")
+                modules_info.append(f"[missing] {module_name}: Not loaded")
         return "\n".join(modules_info)
     except Exception as e:
         return f"Error checking module status: {str(e)}"
@@ -2510,7 +2537,7 @@ async def discover_object_methods(
         for method in methods
     ]
     
-    return await response_handler.handle_response(
+    return response_handler.handle_response(
         methods_data,
         f"object_methods_{object_path.replace('.', '_')}"
     )
@@ -2896,8 +2923,8 @@ if __name__ == "__main__":
                       help="Transport protocol to use")
     parser.add_argument("--port", type=int, default=int(os.getenv("PORT", 8000)),
                       help="Port for HTTP transport")
-    parser.add_argument("--host", default="0.0.0.0",
-                      help="Host for HTTP transport")
+    parser.add_argument("--host", default="127.0.0.1",
+                      help="Host for HTTP transport (use 0.0.0.0 only with an auth token on trusted networks)")
     
     parser.add_argument("--disable-browser-management", action="store_true",
                       help="Disable browser management tools (spawn, navigate, close, etc.)")
@@ -2995,6 +3022,12 @@ if __name__ == "__main__":
         )
     
     if args.transport == "http":
+        if HTTP_AUTH_TOKEN is None and not is_loopback_host(args.host):
+            print(
+                f"WARNING: HTTP transport is listening on {args.host} without an auth token. "
+                "Set STEALTH_BROWSER_MCP_AUTH_TOKEN before exposing the server beyond localhost.",
+                file=sys.stderr,
+            )
         mcp.run(transport="http", host=args.host, port=args.port)
     else:
         install_stdio_guard()

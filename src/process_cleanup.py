@@ -76,14 +76,32 @@ class ProcessCleanup:
         if not isinstance(pid, int) or pid <= 0:
             return False
         try:
-            os.kill(pid, 0)
-        except ProcessLookupError:
+            return psutil.pid_exists(pid)
+        except Exception:
             return False
-        except PermissionError:
-            return True
-        except OSError:
+
+    @staticmethod
+    def _pid_predates_tracking(pid: int, metadata: Dict[str, Any]) -> bool:
+        """
+        Check that a PID still refers to the process recorded in metadata.
+
+        A PID can be reused after the original browser exits or after a
+        reboot. The recorded process must have started before it was tracked.
+
+        Args:
+            pid (int): Process id taken from tracked metadata.
+            metadata (Dict[str, Any]): Tracked metadata with a tracking timestamp.
+
+        Returns:
+            bool: True when the running process started before it was tracked.
+        """
+        tracked_at = metadata.get("timestamp")
+        if not isinstance(tracked_at, (int, float)):
             return False
-        return True
+        try:
+            return psutil.Process(pid).create_time() <= tracked_at + 5.0
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            return False
 
     @staticmethod
     def _normalize_path(path: Optional[str]) -> Optional[str]:
@@ -271,8 +289,10 @@ class ProcessCleanup:
                 "browser_processes": entries,
                 "timestamp": time.time(),
             }
-            with open(self.pid_file, "w") as file_handle:
+            temp_file = f"{self.pid_file}.{os.getpid()}.tmp"
+            with open(temp_file, "w", encoding="utf-8") as file_handle:
                 json.dump(data, file_handle)
+            os.replace(temp_file, self.pid_file)
         except Exception as error:
             debug_logger.log_warning(
                 "process_cleanup",
@@ -370,7 +390,11 @@ class ProcessCleanup:
         """
         pids_to_kill = self._get_browser_pids_for_profile(metadata.get("user_data_dir"))
         fallback_pid = metadata.get("pid")
-        if not pids_to_kill and isinstance(fallback_pid, int):
+        if (
+            not pids_to_kill
+            and isinstance(fallback_pid, int)
+            and self._pid_predates_tracking(fallback_pid, metadata)
+        ):
             pids_to_kill = {fallback_pid}
         if not pids_to_kill:
             return True
